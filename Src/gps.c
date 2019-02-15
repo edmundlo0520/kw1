@@ -37,12 +37,6 @@ uint8_t glo_fix_type = 1;  //GPS status
 
 // TODO: Modify gps parser functions
 char NMEA_PREFIX[][8] = {
-#if 0
-		"$GPGGA",
-		"$GPGSA",
-		"$GPRMC",
-		"$GPGSV"
-#else
 		"$GNGGA",
 		"$GPGGA",
 		"$GNGSA",
@@ -52,18 +46,11 @@ char NMEA_PREFIX[][8] = {
 		"$GPGSV",
 		"$GLGSV",
 		"$GNGLL"
-#endif
 };
 
 typedef bool (*FP_CHAR)(char*);
 // TODO: Add dummy gps parser functions
 FP_CHAR fp_GPS[] = {
-#if 0
-		HLGPS_ParseGGA,
-		HLGPS_ParseGSA,
-		HLGPS_ParseRMC,
-		HLGPS_ParseGSV
-#else
 		HLGPS_ParseGGA,
 		HLGPS_ParseGGA,
 		HLGPS_ParseGSA,
@@ -73,7 +60,6 @@ FP_CHAR fp_GPS[] = {
 		HLGPS_ParseSkip, //HLGPS_ParseGSV,
 		HLGPS_ParseSkip, //HLGPS_ParseGSV,
 		HLGPS_ParseSkip  //HLGPS_ParseGLL
-#endif
 };
 
 typedef enum
@@ -352,65 +338,63 @@ void HLString_CharGetRight(char *src,int ptr)
 
 void HLString_CharGetLeft(char *src,int ptr)
 {
+
 	int strSize = strlen(src);
 	if(strSize <= 0 || ptr < 0 || ptr > strSize)
 		return;
 
-	char temp[128];
+	memset(src+ptr , 0, NMEA_MAX_SIZE-ptr);
 
-	memset(temp,0,strlen(temp));
-
-	strncpy(temp,src,ptr);
-	memset(src,0,strlen(src));
-	strncpy(src,temp,ptr);
 }
 
 bool HLGPS_VerifyChecksum(char *nmeaStr)
 {
-	char sentence[128] = "";
-	strcpy(sentence,nmeaStr);
+	unsigned char calculated_cksum = 0;
+	unsigned char received_cksum = 0;
+	char 	ch = '0';
+	char 	token = '*';
+	int 	size;
 
-	unsigned char calculated = 0;
-	unsigned char nmea = 0;
-	char ch = '0';
+	size = strlen(nmeaStr);
+	if( size > NMEA_MAX_SIZE)
+		return false;
 
-	char token = '*';
-	char *digit = strrchr(sentence,token);
-
+	char *digit = strrchr(nmeaStr, token);
 	if(digit == NULL)
 		return false;
 
-	calculated = 0;
-	for (int i = 0; i < (int)strlen(sentence); i++)
+	calculated_cksum = 0;
+	for (int i = 0; i < size; i++)
 	{
-		strncpy(&ch,sentence+i,1);
+		ch = (char) *(nmeaStr+i);
 		if(ch == '*')
 			break;
 
 		if(ch != '$')
 		{
-			calculated ^= ch;
+			calculated_cksum ^= ch;
 		}
 	}
 
 	if(ch != '*')
 		return false;
 
-	nmea = (unsigned char)strtol(digit+1,&digit+strlen(digit),16);
+	received_cksum = ((*(digit+1)-'0')<<4) + (*(digit+2)-'0');
 
-	for(int i=0;i<(int)strlen(nmeaStr);i++)
+	for(int i=0;i<size;i++)
 	{
-		if(!strncmp(nmeaStr+i,&token,1))
+		if(*(nmeaStr+i) == token )
 		{
 			HLString_CharGetLeft(nmeaStr,i);
 			break;
 		}
 	}
-	if(nmea == calculated)
+	if(received_cksum == calculated_cksum)
 		return true;
 	else
 		return false;
 }
+
 
 // TODO: for GPS uart debug
 #define DBG_REQUEST_SIZE 200
@@ -478,6 +462,7 @@ void HLGPS_StartToParseNMEA(void)
     //I try to combine NMEA sentence as completely sentence if I have fragment sentence before
     if(strlen(m_fragment))
     {
+    	//printf("--> frmgt size=%d\r\n", strlen(m_fragment));
     	strcpy(gps_sentence,m_fragment);
     	ptr = gps_sentence + strlen(gps_sentence);
     }
@@ -496,29 +481,12 @@ void HLGPS_StartToParseNMEA(void)
     		if(*(--ptr - 1) == '\r')
     			ptr--;
     		*ptr = '\0';
-#if 0
-	    		if (gps_sentence[4]=='G'&&gps_sentence[5]=='A')
-	    		{
-	    			//if(HLGPS_VerifyChecksum(gps_sentence))
-	    			{
-	    				printf("g=%s\r\n", gps_sentence);
-	    				HLGPS_ParseGGA(gps_sentence);
-	    			}
-	    		}
-	    		else if(gps_sentence[4]=='S'&&gps_sentence[5]=='A')
-	    		{
-	    			//if(HLGPS_VerifyChecksum(gps_sentence))
-	    			{
-	    				printf("g=%s\r\n", gps_sentence);
-	    				HLGPS_ParseGSA(gps_sentence);
-	    			}
-	    		}
-	    		//else
-	    			//printf("x\r\n");
+    		//printf("gs=%d\r\n", strlen(gps_sentence));
 
-#else
-    		//if(HLGPS_VerifyChecksum(gps_sentence))
-    		{
+    		if(!HLGPS_VerifyChecksum(gps_sentence))
+	    			err_count++;
+	    	else
+	    	{
     			for(int index = 0;index < prefix_size; index++)
     			{
     				// TODO: Check the GPS TAG comparison
@@ -530,9 +498,6 @@ void HLGPS_StartToParseNMEA(void)
     				}
     			}
     		}
-    		//else
-    			//err_count++;
-#endif
 
     		//Clear string buffer
     		memset(m_fragment,0,sizeof(m_fragment));
@@ -637,34 +602,6 @@ void HLGPS_GetDataFromDriver(void)
 		}
 
 	}
-
-#if 0
-	if(m_GPSSize==0)
-	{
-		test_zero_times++;
-		if(test_zero_times > 1000)
-			while (1);
-		return;
-	}
-		temp_current_pos = (uint8_t*)(&temp_buf[0])+total_bytes;
-
-		strncpy(temp_current_pos, m_pGPS, m_GPSSize);
-
-		test_info[test_gCount][0] = m_GPSSize;
-		test_info[test_gCount][2] = (uint32_t) (temp_current_pos);
-
-		total_bytes += bytes_received;
-		test_info[test_gCount][1] = total_bytes;
-		test_info[test_gCount][3] = (uint32_t) (temp_current_pos+m_GPSSize);
-		test_info[test_gCount][4] = test_zero_times;
-		test_info[test_gCount][5] = m_pGPS;
-
-		test_gCount++;
-		test_zero_times = 0;
-
-		if(test_gCount==DBG_BUF_SIZE)
-			while(1);
-#endif
 
 	return;
 }
