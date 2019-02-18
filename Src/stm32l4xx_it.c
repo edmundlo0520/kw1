@@ -76,12 +76,15 @@
 extern DMA_HandleTypeDef hdma_usart2_tx;
 extern DMA_HandleTypeDef hdma_usart2_rx;
 extern UART_HandleTypeDef huart4;
+extern UART_HandleTypeDef huart1;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
 extern uint8_t gps_buffer[2][GPS_BUFFER_SIZE];
+extern uint8_t nbiot_buffer[];
 //extern uint16_t gps_data_point; // not used
 //extern uint16_t gps_buffer_base; // not used
+uint16_t nbiot_data_point = 0;
 
 /******************************************************************************/
 /*           Cortex-M4 Processor Interruption and Exception Handlers          */ 
@@ -220,6 +223,18 @@ void DMA1_Channel2_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Channel2_IRQn 1 */
 
   /* USER CODE END DMA1_Channel2_IRQn 1 */
+}
+
+void USART1_IRQHandler(void)
+{
+  /* USER CODE BEGIN UART4_IRQn 0 */
+  /* USER CODE END UART4_IRQn 0 */
+  HAL_UART_IRQHandler(&huart1);
+
+  nbiot_data_point++;
+  /* USER CODE BEGIN UART4_IRQn 1 */
+
+  /* USER CODE END UART4_IRQn 1 */
 }
 
 /* TODO: add UART4 interfaces / exported functions to GPS task */

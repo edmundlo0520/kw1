@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-void NBIOT_AT_Command_Send();
+void NBIOT_LocationUpdate_Request(void);
 
 #ifdef __cplusplus
 }

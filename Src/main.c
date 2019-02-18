@@ -94,10 +94,13 @@ void StartDefaultTask(void const * argument);
 void StartGPSTask(void const * argument);
 void StartNBIOTTask(void const * argument);
 
+// TODO: Modify gps_buffer
 uint8_t gps_buffer[2][GPS_BUFFER_SIZE] = {0};
 uint8_t buf_index = 0;
-uint32_t gps_data_point = 0;
+uint16_t gps_data_point = 0;
 uint16_t gps_buffer_base = buffer_num_1;
+
+uint8_t nbiot_buffer[1024] = {0};
 
 /* USER CODE BEGIN PFP */
 
@@ -154,6 +157,7 @@ int main(void)
 
   //For NBIOT
   MX_USART1_UART_Init();
+  HAL_UART_Receive_IT(&huart1,nbiot_buffer,1024);
 
   //For GPS
   MX_UART4_UART_Init();
@@ -177,18 +181,17 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
   printf("Debug message test!!\r\n");
   /* Create the thread(s) */
+
+  //For GPS parser task
+   osThreadDef(NBIOTTask, StartNBIOTTask, osPriorityNormal, 0,1024);
+   NBIOTTaskHandle = osThreadCreate(osThread(NBIOTTask), NULL);
   /* definition and creation of defaultTask */
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   //For GPS parser task
-  // FIXME: Edmund, GPS stack size
-  osThreadDef(GPSTask, StartGPSTask, osPriorityHigh, 0, 128+configEXTRA_GPS_STAXK_SIZE/4);
+  osThreadDef(GPSTask, StartGPSTask, osPriorityHigh, 0, 128);
   GPSTaskHandle = osThreadCreate(osThread(GPSTask), NULL);
-
-  //For GPS parser task
-  osThreadDef(NBIOTTask, StartNBIOTTask, osPriorityHigh, 0, 128);
-  NBIOTTaskHandle = osThreadCreate(osThread(NBIOTTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -208,7 +211,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  //HAL_UART_Receive_IT(&huart4,gps_buffer,512);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -522,7 +525,8 @@ void StartNBIOTTask(void const * argument)
     /* Infinite loop */
     for(;;)
     {
-        NBIOT_AT_Command_Send();
+        //NBIOT_AT_Command_Send();
+    	NBIOT_LocationUpdate_Request();
         osDelay(20000);
     }
     /* USER CODE END 5 */
@@ -536,16 +540,11 @@ void StartGPSTask(void const * argument)
   HLGPS_Init();
   for(;;)
   {
-	  // FIXME: Add the GPS test agent here
 	HLGPS_GetDataFromDriver();
 	HLGPS_StartToParseNMEA();
-    osDelay(200);
+    osDelay(100);
   }
   /* USER CODE END 5 */ 
-}
-void vApplicationStackOverflowHook( TaskHandle_t *pxTask, signed char *pcTaskName )
-{
-	return;
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
